@@ -718,6 +718,16 @@ AP_InertialSensor::detect_backends(void)
         break;
 
     case AP_BoardConfig::PX4_BOARD_PIXHAWK:
+#if AERIALTRONICS
+        extern bool new_imu;
+        if (new_imu) {
+            ADD_BACKEND(AP_InertialSensor_Invensense::probe(*this, hal.spi->get_device("icm20689"), ROTATION_ROLL_180));
+            ADD_BACKEND(AP_InertialSensor_BMI055::probe(*this,
+                                                        hal.spi->get_device(HAL_INS_LSM9DS0_A_NAME),
+                                                        hal.spi->get_device(HAL_INS_LSM9DS0_G_NAME),
+                                                        ROTATION_YAW_270));
+        } else {
+#endif
         ADD_BACKEND(AP_InertialSensor_Invensense::probe(*this, hal.spi->get_device(HAL_INS_MPU60x0_NAME), ROTATION_ROLL_180));
         ADD_BACKEND(AP_InertialSensor_LSM9DS0::probe(*this,
                                                       hal.spi->get_device(HAL_INS_LSM9DS0_G_NAME),
@@ -725,6 +735,9 @@ AP_InertialSensor::detect_backends(void)
                                                       ROTATION_ROLL_180,
                                                       ROTATION_ROLL_180_YAW_270,
                                                       ROTATION_PITCH_180));
+#if AERIALTRONICS
+        }
+#endif
         break;
 
     case AP_BoardConfig::PX4_BOARD_PIXHAWK2:

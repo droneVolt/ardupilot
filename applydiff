@@ -1,0 +1,4 @@
+cd ardupilot
+git apply --whitespace=nowarn --reject -v ./ardupilot.diff
+git diff --name-only
+

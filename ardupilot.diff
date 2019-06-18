@@ -1,0 +1,102 @@
+diff --git a/libraries/AP_BoardConfig/board_drivers.cpp b/libraries/AP_BoardConfig/board_drivers.cpp
+index 4cca5fa..0b7f7d1 100644
+--- a/libraries/AP_BoardConfig/board_drivers.cpp
++++ b/libraries/AP_BoardConfig/board_drivers.cpp
+@@ -150,6 +150,10 @@ bool AP_BoardConfig::spi_check_register(const char *devname, uint8_t regnum, uin
+ #define MPU_WHOAMI_MPU9250  0x71
+ #define MPU_WHOAMI_ICM20608 0xaf
+ #define MPU_WHOAMI_ICM20602 0x12
++#if AERIALTRONICS
++#define MPU_WHOAMI_ICM20689 0x98
++bool new_imu = false;
++#endif
+ 
+ #define LSMREG_WHOAMI 0x0f
+ #define LSM_WHOAMI_LSM303D 0x49
+@@ -159,6 +163,9 @@ bool AP_BoardConfig::spi_check_register(const char *devname, uint8_t regnum, uin
+  */
+ void AP_BoardConfig::validate_board_type(void)
+ {
++#if AERIALTRONICS
++return;
++#endif
+     /* some boards can be damaged by the user setting the wrong board
+        type.  The key one is the cube which has a heater which can
+        cook the IMUs if the user uses an old paramater file. We
+@@ -205,6 +212,19 @@ void AP_BoardConfig::board_autodetect(void)
+     hal.console->printf("Detected PX4v1\n");
+ 
+ #elif defined(CONFIG_ARCH_BOARD_PX4FMU_V2) || defined(HAL_CHIBIOS_ARCH_FMUV3)
++#if AERIALTRONICS
++    if (spi_check_register("icm20689", MPUREG_WHOAMI, MPU_WHOAMI_ICM20689)) {
++        hal.console->printf("Detected Pixhawk with ICM20689\n");
++        new_imu = true;
++    }
++    if (spi_check_register("mpu6000", MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0)) {
++        hal.console->printf("Detected Pixhawk with MPU60X0\n");
++        new_imu = false;
++    }
++    state.board_type.set(PX4_BOARD_PIXHAWK);
++    return;
++#endif
++
+     if ((spi_check_register("mpu6000_ext", MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0) ||
+          spi_check_register("mpu6000_ext", MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0) ||
+          spi_check_register("mpu9250_ext", MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0) ||
+diff --git a/libraries/AP_HAL/AP_HAL_Boards.h b/libraries/AP_HAL/AP_HAL_Boards.h
+index 6c63996..0643699 100644
+--- a/libraries/AP_HAL/AP_HAL_Boards.h
++++ b/libraries/AP_HAL/AP_HAL_Boards.h
+@@ -6,6 +6,8 @@
+  */
+ #pragma once
+ 
++#define AERIALTRONICS 1
++
+ #define HAL_BOARD_SITL     3
+ #define HAL_BOARD_SMACCM   4  // unused
+ #define HAL_BOARD_PX4      5
+diff --git a/libraries/AP_HAL_ChibiOS/hwdef/fmuv3/hwdef.dat b/libraries/AP_HAL_ChibiOS/hwdef/fmuv3/hwdef.dat
+index f267345..4ced134 100644
+--- a/libraries/AP_HAL_ChibiOS/hwdef/fmuv3/hwdef.dat
++++ b/libraries/AP_HAL_ChibiOS/hwdef/fmuv3/hwdef.dat
+@@ -402,6 +402,7 @@ PE15 VDD_5V_PERIPH_OC INPUT PULLUP
+ SPIDEV ms5611         SPI1 DEVID3  BARO_CS      MODE3 20*MHZ 20*MHZ
+ SPIDEV ms5611_ext     SPI4 DEVID2  BARO_EXT_CS  MODE3 20*MHZ 20*MHZ
+ SPIDEV mpu6000        SPI1 DEVID4  MPU_CS       MODE3  2*MHZ  8*MHZ
++SPIDEV icm20689       SPI1 DEVID4  MPU_CS       MODE3  2*MHZ  8*MHZ
+ SPIDEV icm20608-am    SPI1 DEVID2  ACCEL_EXT_CS MODE3  4*MHZ  8*MHZ
+ SPIDEV mpu9250        SPI1 DEVID4  MPU_CS       MODE3  4*MHZ  8*MHZ
+ SPIDEV mpu9250_ext    SPI4 DEVID1  MPU_EXT_CS   MODE3  4*MHZ  8*MHZ
+diff --git a/libraries/AP_InertialSensor/AP_InertialSensor.cpp b/libraries/AP_InertialSensor/AP_InertialSensor.cpp
+index 30ecce8..d70ebd1 100644
+--- a/libraries/AP_InertialSensor/AP_InertialSensor.cpp
++++ b/libraries/AP_InertialSensor/AP_InertialSensor.cpp
+@@ -718,6 +718,16 @@ AP_InertialSensor::detect_backends(void)
+         break;
+ 
+     case AP_BoardConfig::PX4_BOARD_PIXHAWK:
++#if AERIALTRONICS
++        extern bool new_imu;
++        if (new_imu) {
++            ADD_BACKEND(AP_InertialSensor_Invensense::probe(*this, hal.spi->get_device("icm20689"), ROTATION_ROLL_180));
++            ADD_BACKEND(AP_InertialSensor_BMI055::probe(*this,
++                                                        hal.spi->get_device(HAL_INS_LSM9DS0_A_NAME),
++                                                        hal.spi->get_device(HAL_INS_LSM9DS0_G_NAME),
++                                                        ROTATION_YAW_270));
++        } else {
++#endif
+         ADD_BACKEND(AP_InertialSensor_Invensense::probe(*this, hal.spi->get_device(HAL_INS_MPU60x0_NAME), ROTATION_ROLL_180));
+         ADD_BACKEND(AP_InertialSensor_LSM9DS0::probe(*this,
+                                                       hal.spi->get_device(HAL_INS_LSM9DS0_G_NAME),
+@@ -725,6 +735,9 @@ AP_InertialSensor::detect_backends(void)
+                                                       ROTATION_ROLL_180,
+                                                       ROTATION_ROLL_180_YAW_270,
+                                                       ROTATION_PITCH_180));
++#if AERIALTRONICS
++        }
++#endif
+         break;
+ 
+     case AP_BoardConfig::PX4_BOARD_PIXHAWK2:
+

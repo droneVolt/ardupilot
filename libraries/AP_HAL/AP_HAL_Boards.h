@@ -6,6 +6,8 @@
  */
 #pragma once
 
+#define AERIALTRONICS 1
+
 #define HAL_BOARD_SITL     3
 #define HAL_BOARD_SMACCM   4  // unused
 #define HAL_BOARD_PX4      5
