@@ -218,6 +218,10 @@ static bool check_ms5611(const char* devname) {
 #define MPU_WHOAMI_MPU9250  0x71
 #define MPU_WHOAMI_ICM20608 0xaf
 #define MPU_WHOAMI_ICM20602 0x12
+#if AERIALTRONICS
+#define MPU_WHOAMI_ICM20689 0x98
+bool new_imu = false;
+#endif
 
 #define LSMREG_WHOAMI 0x0f
 #define LSM_WHOAMI_LSM303D 0x49
@@ -231,6 +235,9 @@ static bool check_ms5611(const char* devname) {
  */
 void AP_BoardConfig::validate_board_type(void)
 {
+#if AERIALTRONICS
+return;
+#endif
     /* some boards can be damaged by the user setting the wrong board
        type.  The key one is the cube which has a heater which can
        cook the IMUs if the user uses an old paramater file. We
@@ -307,6 +314,19 @@ void AP_BoardConfig::board_autodetect(void)
     hal.console->printf("Detected PX4v1\n");
 
 #elif defined(CONFIG_ARCH_BOARD_PX4FMU_V2) || defined(HAL_CHIBIOS_ARCH_FMUV3)
+#if AERIALTRONICS
+    if (spi_check_register("icm20689", MPUREG_WHOAMI, MPU_WHOAMI_ICM20689)) {
+        hal.console->printf("Detected Pixhawk with ICM20689\n");
+        new_imu = true;
+    }
+    if (spi_check_register("mpu6000", MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0)) {
+        hal.console->printf("Detected Pixhawk with MPU60X0\n");
+        new_imu = false;
+    }
+    state.board_type.set(PX4_BOARD_PIXHAWK);
+    return;
+#endif
+
     if ((spi_check_register("mpu6000_ext", MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0) ||
          spi_check_register("mpu6000_ext", MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0) ||
          spi_check_register("mpu9250_ext", MPUREG_WHOAMI, MPU_WHOAMI_MPU60X0) ||
